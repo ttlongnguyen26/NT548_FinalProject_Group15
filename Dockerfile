@@ -1,4 +1,4 @@
-FROM python:3.12
+FROM python:3.7
 
 WORKDIR /NT548_FINALPROJECT_GROUP15/app
 
