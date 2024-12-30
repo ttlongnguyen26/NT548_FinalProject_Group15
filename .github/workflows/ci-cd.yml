@@ -1,0 +1,32 @@
+name: CI/CD Workflow
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  run-ci:
+    uses: .github/workflows/ci.yml
+    with:
+      branch: ${{ github.ref_name }}
+    secrets:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+  run-cd:
+    needs: run-ci
+    uses: .github/workflows/cd.yml
+    with:
+      branch: ${{ github.ref_name }}
+    secrets:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}

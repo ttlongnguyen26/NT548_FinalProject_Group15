@@ -1,0 +1,101 @@
+name: CD - Push to ECR and Deploy
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        description: "Branch to run CD"
+        required: true
+        type: string
+
+jobs:
+  push-to-ecr:
+    runs-on: ubuntu-22.04
+    env:
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Log in to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Create ECR repository if it doesn't exist
+      run: |
+        aws_account_id=$(aws sts get-caller-identity --query "Account" --output text)
+        aws ecr describe-repositories --repository-names "lamlt-sonvt" || aws ecr create-repository --repository-name "lamlt-sonvt"
+
+    - name: Install Trivy
+      run: |
+        wget https://github.com/aquasecurity/trivy/releases/download/v0.57.0/trivy_0.57.0_Linux-64bit.tar.gz
+        tar -xzf trivy_0.57.0_Linux-64bit.tar.gz
+        sudo mv trivy /usr/local/bin/
+
+    - name: Set Up Trivy Cache
+      id: trivy-cache
+      uses: actions/cache@v4
+      with:
+          path: ~/.cache/trivy/db
+          key: ${{ runner.os }}-trivy-db-cache
+
+    - name: Download Trivy Offline Database
+      if: steps.trivy-cache.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p ~/.cache/trivy/db
+        oras pull ghcr.io/aquasecurity/trivy-db:2
+        tar -xvf db.tar.gz -C ~/.cache/trivy/db
+
+    - name: Set up .env files for services
+      run: |
+        services=("Cart" "User" "Product" "front-end")
+        for service in "${services[@]}"; do
+            cd "E-Commerce_Web_Application/$service"
+            cat <<EOF > .env
+ACCESS_TOKEN=${{ env.ACCESS_TOKEN }}
+EOF
+            cat .env
+            cd - || exit 1
+        done
+
+    - name: Build and tag Docker images
+      run: |
+        services=("Cart" "User" "Product" "front-end")
+        commit_id=$(echo "${GITHUB_SHA}" | cut -c1-7)
+        aws_account_id=$(aws sts get-caller-identity --query "Account" --output text)
+        for service in "${services[@]}"; do
+            image_name="${aws_account_id}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/lamlt-sonvt:${service,,}-${commit_id}"
+            cd "E-Commerce_Web_Application/$service"
+            docker build -t "$image_name" .
+            cd - || exit 1
+        done
+
+    - name: Run Trivy vulnerability scan
+      run: |
+        services=("Cart" "User" "Product" "front-end")
+        aws_account_id=$(aws sts get-caller-identity --query "Account" --output text)
+        commit_id=$(echo "${GITHUB_SHA}" | cut -c1-7)
+        for service in "${services[@]}"; do
+            image_name="${aws_account_id}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/lamlt-sonvt:${service,,}-${commit_id}"
+            trivy image --cache-dir ~/.cache/trivy --exit-code 0 --severity CRITICAL,HIGH "$image_name"
+        done
+
+    - name: Push Docker images to ECR
+      run: |
+        services=("Cart" "User" "Product" "front-end")
+        aws_account_id=$(aws sts get-caller-identity --query "Account" --output text)
+        commit_id=$(echo "${GITHUB_SHA}" | cut -c1-7)
+        for service in "${services[@]}"; do
+            image_name="${aws_account_id}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/lamlt-sonvt:${service,,}-${commit_id}"
+            docker push "$image_name"
+        done
