@@ -11,22 +11,14 @@ on:
 
 jobs:
   run-ci:
-    uses: .github/workflows/ci.yml
+    uses: ./.github/workflows/ci.yml@main
     with:
       branch: ${{ github.ref_name }}
-    secrets:
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+    secrets: inherit
 
   run-cd:
     needs: run-ci
-    uses: .github/workflows/cd.yml
+    uses: ./.github/workflows/cd.yml@main
     with:
       branch: ${{ github.ref_name }}
-    secrets:
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+    secrets: inherit
