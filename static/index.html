@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text-to-Speech Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        textarea, select, button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        audio {
+            display: block;
+            margin: 20px auto;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Text-to-Speech Converter</h1>
+        <form id="text-to-speech-form">
+            <label for="text">Enter Text:</label>
+            <textarea id="text" rows="5" placeholder="Enter your text here..." required></textarea>
+            
+            <label for="language">Select Language:</label>
+            <select id="language" required>
+                <option value="en">English</option>
+                <option value="es">Spanish</option>
+                <option value="fr">French</option>
+                <option value="de">German</option>
+                <option value="hi">Hindi</option>
+                <option value="vi">Vietnamese</option>
+
+                <!-- Add more languages as needed -->
+            </select>
+            
+            <button type="button" onclick="convertTextToSpeech()">Convert and Play</button>
+        </form>
+        
+        <audio id="audio-player" controls style="display: none;"></audio>
+    </div>
+
+    <script>
+        async function convertTextToSpeech() {
+            const text = document.getElementById("text").value;
+            const lang = document.getElementById("language").value;
+            const audioPlayer = document.getElementById("audio-player");
+
+            if (!text.trim()) {
+                alert("Please enter some text.");
+                return;
+            }
+
+            try {
+                const response = await fetch("/convert", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ text: text, lang: lang })
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to convert text to speech.");
+                }
+
+                const blob = await response.blob();
+                const audioUrl = URL.createObjectURL(blob);
+                audioPlayer.src = audioUrl;
+                audioPlayer.style.display = "block";
+                audioPlayer.play();
+            } catch (error) {
+                console.error("Error:", error);
+                alert("Error converting text to speech. Please try again.");
+            }
+        }
+    </script>
+</body>
+</html>
