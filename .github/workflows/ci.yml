@@ -53,4 +53,4 @@ jobs:
 
       - name: Trivy scanning
         run: |
-          trivy fs --severity HIGH,CRITICAL ./E-Commerce_Web_Application
+          trivy fs --severity HIGH,CRITICAL ./app.py
