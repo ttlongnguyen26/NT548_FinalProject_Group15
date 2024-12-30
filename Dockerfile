@@ -7,7 +7,7 @@ RUN pip install --upgrade pip
 # Run and install requirements of main folder
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
 
