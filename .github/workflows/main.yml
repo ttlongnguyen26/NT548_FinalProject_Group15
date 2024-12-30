@@ -1,0 +1,117 @@
+name: Deploy app
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  set-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      timestamp: ${{ steps.set-timestamp.outputs.timestamp }}
+    steps:
+      - id: set-timestamp
+        run: echo "timestamp=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
+  sonarqube:
+    needs: set-tag
+    name: SonarQube
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  
+      - name: SonarQubeScan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env: 
+          SONAR_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+
+  trivyFileScan:
+    name: Trivy Scan Files
+    needs: [set-tag, sonarqube]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: docker/setup-buildx-action@v2
+      - name: Install Trivy
+        run: |
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.22.0/trivy_0.22.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.22.0_Linux-64bit.deb
+      - name: Run Trivy scan
+        run: trivy fs --severity CRITICAL .
+
+  dockerBuildPush:
+    name: Build and Push Docker Images
+    needs: [set-tag, trivyFileScan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build Docker images
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend:${{ needs.set-tag.outputs.timestamp }} ./frontend
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/order:${{ needs.set-tag.outputs.timestamp }} ./order-service
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/user:${{ needs.set-tag.outputs.timestamp }} ./user-service
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/product:${{ needs.set-tag.outputs.timestamp }} ./product-service
+      - name: Login to Docker Hub
+        run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+      - name: Push Docker images
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/frontend:${{ needs.set-tag.outputs.timestamp }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/order:${{ needs.set-tag.outputs.timestamp }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/user:${{ needs.set-tag.outputs.timestamp }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/product:${{ needs.set-tag.outputs.timestamp }}
+
+  trivyImageScan:
+    name: Trivy Scan Docker Images
+    needs: [set-tag, dockerBuildPush]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Trivy
+        run: |
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.22.0/trivy_0.22.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.22.0_Linux-64bit.deb
+      - name: Scan Docker images
+        run: |
+          trivy image --severity CRITICAL ${{ secrets.DOCKER_USERNAME }}/frontend:${{ needs.set-tag.outputs.timestamp }}
+          trivy image --severity CRITICAL ${{ secrets.DOCKER_USERNAME }}/order:${{ needs.set-tag.outputs.timestamp }}
+          trivy image --severity CRITICAL ${{ secrets.DOCKER_USERNAME }}/user:${{ needs.set-tag.outputs.timestamp }}
+          trivy image --severity CRITICAL ${{ secrets.DOCKER_USERNAME }}/product:${{ needs.set-tag.outputs.timestamp }}
+
+#   deployToEKS:
+#     name: Deploy to AWS EKS
+#     needs: [set-tag, trivyImageScan]
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v3
+#       - uses: aws-actions/configure-aws-credentials@v2
+#         with:
+#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           aws-region: us-east-1
+#       - uses: azure/setup-kubectl@v1
+#         with:
+#           version: 'v1.21.0'
+#       - name: Update kubeconfig
+#         run: aws eks update-kubeconfig --name my-cluster-name
+#       - name: Prepare Kubernetes manifests
+#         run: |
+#           export DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
+#           export TIMESTAMP=${{ needs.set-tag.outputs.timestamp }}
+#           envsubst < kubernetes/frontend.yml > kubernetes/frontend-generated.yml
+#           envsubst < kubernetes/order.yml > kubernetes/order-generated.yml
+#           envsubst < kubernetes/user.yml > kubernetes/user-generated.yml
+#           envsubst < kubernetes/product.yml > kubernetes/product-generated.yml
+#       - name: Deploy to EKS
+#         run: |
+#           kubectl apply -f kubernetes/frontend-generated.yml
+#           kubectl apply -f kubernetes/order-generated.yml
+#           kubectl apply -f kubernetes/user-generated.yml
+#           kubectl apply -f kubernetes/product-generated.yml
+#           kubectl apply -f kubernetes/monitor.yml
+#           kubectl apply -f kubernetes/pvc.yml
+#           kubectl apply -f kubernetes/secret.yml
+#           kubectl apply -f kubernetes/storage-class.yml

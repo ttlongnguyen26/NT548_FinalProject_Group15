@@ -67,4 +67,3 @@ if __name__ == "__main__":
     # Ensure the static folder is where the index.html is stored
     os.makedirs("static", exist_ok=True)
     # Ensure your index.html file is in the "static" directory
-    app.run(debug=True, host="0.0.0.0", port=5000)

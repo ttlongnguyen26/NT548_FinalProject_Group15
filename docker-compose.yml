@@ -1,0 +1,13 @@
+# version: '3.8'
+
+# services:
+#   web:
+#     build: 
+#       context: ./NT548_FINALPROJECT_GROUP15
+#     ports:
+#       - "8000:80"
+#     environment:
+#       - FLASK_ENV=development
+#       - FLASK_APP=app.py
+#    networks:
+#       - micro_network
