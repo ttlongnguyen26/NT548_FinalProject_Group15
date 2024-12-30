@@ -9,7 +9,7 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY NT548_FinalProject_Group15/app .
+COPY /NT548_FinalProject_Group15/app .
 
 EXPOSE 9000
 
