@@ -1,0 +1,151 @@
+# prometheus-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+
+      - job_name: 'user-api'
+        static_configs:
+          - targets: ['cuser-service:5001']
+        metrics_path: '/metrics'
+      
+      - job_name: 'product-api'
+        static_configs:
+          - targets: ['cproduct-service:5002']
+      
+      - job_name: 'order-api'
+        static_configs:
+          - targets: ['corder-service:5003']
+      
+      - job_name: 'frontend-app'
+        static_configs:
+          - targets: ['frontend-service:5000']
+---
+# prometheus-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      securityContext:
+        fsGroup: 65534
+        runAsUser: 65534
+        runAsNonRoot: true
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v2.44.0
+        args:
+          - "--config.file=/etc/prometheus/prometheus.yml"
+          - "--storage.tsdb.path=/prometheus"
+          - "--web.console.libraries=/etc/prometheus/console_libraries"
+          - "--web.console.templates=/etc/prometheus/consoles"
+          - "--web.enable-lifecycle"
+        ports:
+        - containerPort: 9090
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/prometheus/
+        - name: prometheus-storage
+          mountPath: /prometheus
+        resources:
+          requests:
+            cpu: 200m    # 0.1 core CPU
+            memory: 256Mi
+          limits:
+            cpu: 250m    # 0.2 core CPU  
+            memory: 320Mi
+      volumes:
+      - name: config-volume
+        configMap:
+          name: prometheus-config
+      - name: prometheus-storage
+        persistentVolumeClaim:
+          claimName: prometheus-pvc
+---
+# prometheus-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090
+---
+# grafana-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+        fsGroup: 472
+        runAsUser: 472
+        runAsGroup: 472
+      containers:
+      - name: grafana
+        image: grafana/grafana:9.5.2
+        ports:
+        - containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_USER
+          value: "admin"
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          value: "admin"
+        - name: GF_USERS_ALLOW_SIGN_UP
+          value: "false"
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        resources:
+          requests:
+            cpu: 200m    # 0.1 core CPU
+            memory: 256Mi
+          limits:
+            cpu: 250m    # 0.2 core CPU  
+            memory: 320Mi
+      volumes:
+      - name: grafana-storage
+        persistentVolumeClaim:
+          claimName: grafana-pvc
+---
+
+# grafana-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+spec:
+  type: LoadBalancer
+  selector:
+    app: grafana
+  ports:
+    - port: 3000
+      targetPort: 3000
