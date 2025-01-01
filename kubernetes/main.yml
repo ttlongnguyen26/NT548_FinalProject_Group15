@@ -3,21 +3,21 @@ kind: Deployment
 metadata:
   name: deployment
   labels:
-    app: frontend
+    app: main
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: frontend
+      app: main
   template:
     metadata:
       labels:
-        app: frontend
+        app: main
 
     spec:
       containers:
-      - name: frontend
-        image: ${DOCKER_USERNAME}/frontend:${TIMESTAMP}
+      - name: main
+        image: ${DOCKER_USERNAME}/app:${TIMESTAMP}
         imagePullPolicy: Always
         ports:
         - containerPort: 5000
@@ -36,7 +36,7 @@ metadata:
 spec:
   type: LoadBalancer
   selector:
-    app: frontend
+    app: main
   ports:
     - protocol: TCP
       port: 80

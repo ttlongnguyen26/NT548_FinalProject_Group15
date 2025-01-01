@@ -28,6 +28,7 @@ data:
         static_configs:
           - targets: ['frontend-service:5000']
 ---
+
 # prometheus-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
